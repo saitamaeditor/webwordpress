@@ -3,69 +3,54 @@ import logging
 import os
 import requests
 
-# Configurar logs para monitorizar el proceso
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.FileHandler("actualizador_catalogo.log", encoding="utf-8"),
-        logging.StreamHandler(),
-    ],
 )
 
 URL_ORIGEN = "https://cinubo.com"
-RUTA_SALIDA = "https://morvehtv.es"  # Cambia esta ruta según la ubicación de tu web
+RUTA_SALIDA = "catalog.json"
 
 
 def actualizar_catalogo():
-  logging.info("Iniciando la actualización del catálogo...")
+  logging.info("Iniciando la actualización para Movie Engine Pro...")
 
   try:
-    # 1. Descargar el JSON original
     response = requests.get(URL_ORIGEN, timeout=30)
     response.raise_for_status()
     data = response.json()
-    logging.info("Catálogo original descargado correctamente.")
 
+    items = data.get("items", data) if isinstance(data, dict) else data
     nuevo_catalogo = []
 
-    # 2. Iterar y transformar la estructura según las necesidades de tu web
-    items = (
-        data.get("items", data) if isinstance(data, dict) else data
-    )  # Compatible con varios formatos JSON
-
     for item in items:
-      # Puedes añadir filtros (por ejemplo, asegurar que esté en Castellano)
-      pelicula_o_serie = {
-          "id": item.get("id"),
+      # Estructura adaptada a los campos estándar que lee Movie Engine Pro
+      pelicula = {
           "title": item.get("title") or item.get("nombre"),
-          "synopsis": item.get("overview")
-          or item.get("sinopsis", "Sin descripción disponible."),
-          "poster": item.get("poster_path") or item.get("imagen"),
-          "backdrop": item.get("backdrop_path"),
-          "year": item.get("release_year") or item.get("anyo"),
-          "type": item.get("type", "movie"),  # 'movie' o 'series'
-          "audio": "Castellano",
-          "stream_url": item.get("url") or item.get("link"),
+          "original_title": item.get("original_title") or item.get("title"),
+          "overview": item.get("overview") or item.get("sinopsis", ""),
+          "poster_path": item.get("poster_path") or item.get("imagen"),
+          "backdrop_path": item.get("backdrop_path") or item.get("fondo"),
+          "release_date": item.get("release_year") or item.get("anyo"),
+          "type": item.get("type", "movie"),
+          "language": "es",
+          "link": item.get("url") or item.get("link"),
       }
-      nuevo_catalogo.append(pelicula_o_serie)
+      nuevo_catalogo.append(pelicula)
 
-    # Asegurar que el directorio de destino existe
-    os.makedirs(os.path.dirname(RUTA_SALIDA), exist_ok=True)
+    # Movie Engine Pro a veces requiere que el JSON sea un objeto con una clave principal o un array directo.
+    # Si el plugin espera un objeto contenedor, usa la estructura de abajo:
+    output_data = {"results": nuevo_catalogo}
 
-    # 3. Guardar el archivo JSON transformado
     with open(RUTA_SALIDA, "w", encoding="utf-8") as f:
-      json.dump(nuevo_catalogo, f, ensure_ascii=False, indent=4)
+      json.dump(output_data, f, ensure_ascii=False, indent=4)
 
     logging.info(
-        f"¡Catálogo actualizado con éxito! Total de elementos procesados:"
-        f" {len(nuevo_catalogo)}"
+        f"Catálogo generado con éxito: {len(nuevo_catalogo)} elementos."
     )
 
-  except requests.exceptions.RequestException as e:
-    logging.error(f"Error de red al descargar el catálogo: {e}")
   except Exception as e:
-    logging.error(f"Error inesperado procesando el catálogo: {e}")
+    logging.error(f"Error procesando el catálogo: {e}")
 
 
 if __name__ == "__main__":
